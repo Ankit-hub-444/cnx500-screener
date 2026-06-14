@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+venv/
+.venv/
+screener_*.csv
+screener_output.txt
+screener_results.txt
+*.log

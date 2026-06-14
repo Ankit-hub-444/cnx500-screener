@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNX 500 Stock Screener</title>
+  <style>
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --surface2: #21262d;
+      --border:   #30363d;
+      --accent:   #238636;
+      --accent-h: #2ea043;
+      --text:     #c9d1d9;
+      --muted:    #8b949e;
+      --bright:   #f0f6fc;
+      --green:    #3fb950;
+      --red:      #f85149;
+      --blue:     #58a6ff;
+      --yellow:   #e3b341;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px; line-height: 1.5; min-height: 100vh;
+    }
+
+    /* ── Header ────────────────────────────────────── */
+    .hdr {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+    }
+    .hdr-title { color: var(--bright); font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+    .hdr-sub { color: var(--muted); font-size: 12px; }
+    .market-badge {
+      margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
+      padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
+    }
+    .market-badge.bull { background: rgba(63,185,80,.12); border: 1px solid rgba(63,185,80,.35); color: var(--green); }
+    .market-badge.bear { background: rgba(248,81,73,.12); border: 1px solid rgba(248,81,73,.35); color: var(--red); }
+    .market-badge.na   { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .last-run { color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+    /* ── Main ──────────────────────────────────────── */
+    .main { max-width: 1440px; margin: 0 auto; padding: 24px; }
+
+    /* ── Condition cards ───────────────────────────── */
+    .cond-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .card-hdr {
+      background: var(--surface2); padding: 10px 14px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-title { color: var(--bright); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    .grp-btns { display: flex; gap: 6px; }
+    .grp-btn {
+      font-size: 10px; color: var(--muted); background: none;
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 1px 7px; cursor: pointer; transition: all .15s;
+    }
+    .grp-btn:hover { color: var(--bright); border-color: var(--muted); }
+    .card-body { padding: 4px 0; }
+
+    /* Custom checkbox row */
+    .cond-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 14px; cursor: pointer; transition: background .1s;
+      border-bottom: 1px solid rgba(48,54,61,.4);
+      user-select: none;
+    }
+    .cond-row:last-child { border-bottom: none; }
+    .cond-row:hover { background: rgba(255,255,255,.03); }
+    .cond-row input[type=checkbox] { display: none; }
+    .chkbox {
+      width: 15px; height: 15px; border-radius: 3px; flex-shrink: 0;
+      border: 2px solid var(--border); background: var(--surface2);
+      display: flex; align-items: center; justify-content: center; transition: all .15s;
+    }
+    .cond-row input:checked ~ .chkbox { background: var(--accent); border-color: var(--accent); }
+    .chkbox svg { display: none; }
+    .cond-row input:checked ~ .chkbox svg { display: block; }
+    .cond-lbl { font-size: 13px; color: var(--text); transition: color .1s; }
+    .cond-row:hover .cond-lbl { color: var(--bright); }
+
+    /* ── Run bar ───────────────────────────────────── */
+    .run-bar { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+    .run-btn {
+      padding: 9px 22px; background: var(--accent); color: #fff;
+      border: none; border-radius: 6px; font-size: 14px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background .15s;
+    }
+    .run-btn:hover:not(:disabled) { background: var(--accent-h); }
+    .run-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .cond-count { color: var(--muted); font-size: 13px; }
+    .reset-lnk { color: var(--muted); font-size: 12px; cursor: pointer; text-decoration: underline; }
+    .reset-lnk:hover { color: var(--text); }
+
+    /* ── Mode toggle ───────────────────────────────── */
+    .mode-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .mode-btn {
+      padding: 8px 22px; border-radius: 6px; font-size: 14px; font-weight: 600;
+      cursor: pointer; border: 1px solid var(--border);
+      background: var(--surface2); color: var(--muted); transition: all .2s;
+    }
+    .mode-btn.bull-on { background: rgba(63,185,80,.15); border-color: rgba(63,185,80,.5); color: var(--green); }
+    .mode-btn.bear-on { background: rgba(248,81,73,.15); border-color: rgba(248,81,73,.5); color: var(--red); }
+    .mode-desc { color: var(--muted); font-size: 12px; margin-left: 4px; }
+
+    /* In bearish mode: run button + progress bar turn red */
+    body.bear-mode .run-btn           { background: #b91c1c; }
+    body.bear-mode .run-btn:hover:not(:disabled) { background: #dc2626; }
+    body.bear-mode .prog-fill         { background: var(--red); }
+    body.bear-mode .pass-badge        { background: rgba(248,81,73,.12); border-color: rgba(248,81,73,.3); color: var(--red); }
+
+    /* ── Progress ──────────────────────────────────── */
+    #prog-wrap { display: none; margin-bottom: 20px; }
+    .prog-bar { height: 3px; background: var(--surface2); border-radius: 2px; overflow: hidden; margin-bottom: 6px; }
+    .prog-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width .4s; }
+    .prog-msg { color: var(--muted); font-size: 12px; }
+
+    /* ── Results ───────────────────────────────────── */
+    #res-wrap { display: none; }
+    .res-hdr { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 12px; }
+    .res-title { color: var(--bright); font-size: 16px; font-weight: 600; }
+    .res-meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .export-btn {
+      padding: 6px 14px; border: 1px solid var(--border); border-radius: 6px;
+      background: var(--surface2); color: var(--text); font-size: 13px; cursor: pointer;
+      transition: border-color .15s;
+    }
+    .export-btn:hover { border-color: var(--muted); }
+
+    /* Table */
+    .tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead { background: var(--surface2); }
+    th {
+      padding: 9px 12px; text-align: left; color: var(--muted); font-weight: 500;
+      font-size: 11px; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap;
+      cursor: pointer; border-bottom: 1px solid var(--border); transition: color .1s;
+    }
+    th:hover { color: var(--bright); }
+    td { padding: 9px 12px; border-bottom: 1px solid rgba(48,54,61,.4); white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+
+    .sym-lnk { color: var(--blue); font-weight: 600; text-decoration: none; }
+    .sym-lnk:hover { text-decoration: underline; }
+    .pass-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
+      background: rgba(63,185,80,.12); border: 1px solid rgba(63,185,80,.3); color: var(--green);
+    }
+    .pos { color: var(--green); }
+    .neg { color: var(--red); }
+
+    .cond-y, .cond-n {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; border-radius: 4px; font-size: 12px;
+    }
+    .cond-y { background: rgba(63,185,80,.12); border: 1px solid rgba(63,185,80,.3); color: var(--green); }
+    .cond-n { background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.25); color: var(--red); }
+
+    .empty-state { text-align: center; padding: 56px 24px; color: var(--muted); }
+    .empty-state h3 { font-size: 15px; color: var(--text); margin-bottom: 6px; }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      display: inline-block; width: 13px; height: 13px;
+      border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+      border-radius: 50%; animation: spin .7s linear infinite;
+    }
+
+    @media (max-width: 768px) {
+      .cond-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────── -->
+<div class="hdr">
+  <div>
+    <div class="hdr-title">CNX 500 Stock Screener</div>
+    <div class="hdr-sub">NSE India · Daily Data via Yahoo Finance</div>
+  </div>
+  <div id="market-badge" class="market-badge na">
+    <span class="dot"></span> Market status will appear after first run
+  </div>
+  <div class="last-run" id="last-run"></div>
+</div>
+
+<!-- ── Main ────────────────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- Mode Toggle -->
+  <div class="mode-bar">
+    <button id="mode-bull" class="mode-btn bull-on" onclick="setMode('bullish')">&#9650; Bullish &nbsp;/ Long</button>
+    <button id="mode-bear" class="mode-btn"         onclick="setMode('bearish')">&#9660; Bearish / Short</button>
+    <span class="mode-desc" id="mode-desc">Screening for stocks to <strong>BUY</strong></span>
+  </div>
+
+  <!-- Condition Cards -->
+  <div class="cond-grid" id="cond-grid"></div>
+
+  <!-- Run bar -->
+  <div class="run-bar">
+    <button class="run-btn" id="run-btn" onclick="runScreener()">
+      <span id="run-icon">&#9654;</span>
+      Run Screener
+    </button>
+    <span class="cond-count" id="cond-count"></span>
+    <span class="reset-lnk" onclick="resetAll()">Reset to defaults</span>
+  </div>
+
+  <!-- Progress -->
+  <div id="prog-wrap">
+    <div class="prog-bar"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+    <div class="prog-msg" id="prog-msg">Initializing…</div>
+  </div>
+
+  <!-- Results -->
+  <div id="res-wrap">
+    <div class="res-hdr">
+      <div>
+        <div class="res-title" id="res-title">Results</div>
+        <div class="res-meta" id="res-meta"></div>
+      </div>
+      <button class="export-btn" onclick="exportCSV()">&#8595; Export CSV</button>
+    </div>
+    <div class="tbl-wrap">
+      <table><thead id="tbl-head"></thead><tbody id="tbl-body"></tbody></table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Condition definitions ───────────────────────────────────────────────
+const GROUPS = [
+  {
+    id: "trend", title: "Trend",
+    conds: [
+      { key: "c0_150EMA",   label: "Near / Crossed 150 EMA" },
+      { key: "c1_RS_Alpha", label: "RS Alpha (55d) > 0" },
+      { key: "c2_Ratio",    label: "Ratio Chart (vs Nifty 50) > 20 EMA" },
+    ]
+  },
+  {
+    id: "momentum", title: "Momentum",
+    conds: [
+      { key: "c10_Donchian",label: "Price > Donchian Channel (21d) Mid" },
+      { key: "c3_RSI",      label: "RSI (14) > 50" },
+      { key: "c4_MACD",     label: "MACD Line > Signal Line" },
+      { key: "c5_Aroon",    label: "Aroon Oscillator (25) > 0" },
+      { key: "c6_EMA20_50", label: "20 EMA > 50 EMA" },
+    ]
+  },
+  {
+    id: "advanced", title: "Advanced",
+    conds: [
+      { key: "c7_AMA",  label: "Price > Kaufman AMA (ER=14, F=2, S=30)" },
+      { key: "c8_AD",   label: "A/D Line > 21 EMA of A/D" },
+      { key: "c9_Mom",  label: "Momentum (21) > 0" },
+    ]
+  },
+];
+
+const ALL_CONDS = GROUPS.flatMap(g => g.conds);
+
+// Bearish label overrides (all conditions reversed)
+const BEAR_LABELS = {
+  "c0_150EMA":    "Near / Crossed BELOW 150 EMA",
+  "c1_RS_Alpha":  "RS Alpha (55d) < 0  (Underperforming)",
+  "c2_Ratio":     "Ratio Chart (vs Nifty 50) < 20 EMA",
+  "c10_Donchian": "Price < Donchian Channel (21d) Mid",
+  "c3_RSI":       "RSI (14) < 50",
+  "c4_MACD":      "MACD Line < Signal Line",
+  "c5_Aroon":     "Aroon Oscillator (25) < 0",
+  "c6_EMA20_50":  "20 EMA < 50 EMA  (Death Cross)",
+  "c7_AMA":       "Price < Kaufman AMA (ER=14, F=2, S=30)",
+  "c8_AD":        "A/D Line < 21 EMA of A/D",
+  "c9_Mom":       "Momentum (21) < 0",
+};
+
+// ── State ───────────────────────────────────────────────────────────────
+let currentMode = "bullish";
+let sortCol = "RS_Alpha_55d", sortAsc = false;
+let lastResults = [], lastActiveConds = [];
+let pollTimer = null;
+
+// ── Mode switching ──────────────────────────────────────────────────────
+function setMode(mode) {
+  currentMode = mode;
+  const isBear = mode === "bearish";
+  document.body.classList.toggle("bear-mode", isBear);
+  document.getElementById("mode-bull").className = "mode-btn" + (isBear ? "" : " bull-on");
+  document.getElementById("mode-bear").className = "mode-btn" + (isBear ? " bear-on" : "");
+  document.getElementById("mode-desc").innerHTML =
+    isBear ? "Screening for stocks to <strong style='color:var(--red)'>SHORT</strong>"
+           : "Screening for stocks to <strong>BUY</strong>";
+  buildUI(); // re-render checkboxes with updated labels
+}
+
+// ── Build UI ────────────────────────────────────────────────────────────
+function buildUI() {
+  const isBear = currentMode === "bearish";
+  const grid = document.getElementById("cond-grid");
+  // Preserve existing checked state across re-renders
+  const prevState = {};
+  ALL_CONDS.forEach(c => {
+    const el = document.getElementById(`chk-${c.key}`);
+    if (el) prevState[c.key] = el.checked;
+  });
+
+  grid.innerHTML = GROUPS.map(g => `
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">${g.title}</span>
+        <div class="grp-btns">
+          <button class="grp-btn" onclick="setGroup('${g.id}',true)">All</button>
+          <button class="grp-btn" onclick="setGroup('${g.id}',false)">None</button>
+        </div>
+      </div>
+      <div class="card-body">
+        ${g.conds.map(c => {
+          const label = isBear ? (BEAR_LABELS[c.key] || c.label) : c.label;
+          const checked = prevState[c.key] !== false; // default: checked
+          return `
+          <label class="cond-row" for="chk-${c.key}">
+            <input type="checkbox" id="chk-${c.key}" data-key="${c.key}"
+                   ${checked ? "checked" : ""} onchange="updateCount()">
+            <span class="chkbox">
+              <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+                <path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="cond-lbl">${label}</span>
+          </label>`;
+        }).join("")}
+      </div>
+    </div>
+  `).join("");
+  updateCount();
+}
+
+function setGroup(groupId, checked) {
+  const g = GROUPS.find(g => g.id === groupId);
+  g.conds.forEach(c => { document.getElementById(`chk-${c.key}`).checked = checked; });
+  updateCount();
+}
+
+function resetAll() {
+  ALL_CONDS.forEach(c => { document.getElementById(`chk-${c.key}`).checked = true; });
+  updateCount();
+}
+
+function activeConds() {
+  return ALL_CONDS.filter(c => document.getElementById(`chk-${c.key}`).checked).map(c => c.key);
+}
+
+function updateCount() {
+  const n = activeConds().length;
+  document.getElementById("cond-count").textContent = `${n} of ${ALL_CONDS.length} conditions active`;
+  document.getElementById("run-btn").disabled = n === 0;
+}
+
+// ── Run screener ────────────────────────────────────────────────────────
+async function runScreener() {
+  const conds = activeConds();
+  if (!conds.length) return;
+
+  lastActiveConds = conds;
+  setBusy(true);
+  document.getElementById("prog-wrap").style.display = "block";
+  document.getElementById("res-wrap").style.display  = "none";
+  setProgress(3, "Starting screener…");
+
+  try {
+    const resp = await fetch("/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conditions: conds, mode: currentMode }),
+    });
+    if (!resp.ok) {
+      const e = await resp.json();
+      throw new Error(e.error || "Failed to start");
+    }
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(poll, 1500);
+  } catch (e) {
+    alert("Error: " + e.message);
+    setBusy(false);
+  }
+}
+
+async function poll() {
+  try {
+    const data = await (await fetch("/status")).json();
+    setProgress(data.progress || 0, data.message || "");
+
+    if (data.status === "done") {
+      clearInterval(pollTimer);
+      setBusy(false);
+      showResults(data);
+    } else if (data.status === "error") {
+      clearInterval(pollTimer);
+      setBusy(false);
+      alert("Screener error:\n" + data.error);
+    }
+  } catch (e) { console.error(e); }
+}
+
+// ── UI helpers ──────────────────────────────────────────────────────────
+function setBusy(busy) {
+  const btn = document.getElementById("run-btn");
+  btn.disabled = busy;
+  document.getElementById("run-icon").innerHTML = busy
+    ? '<span class="spinner"></span>'
+    : "&#9654;";
+}
+
+function setProgress(pct, msg) {
+  document.getElementById("prog-fill").style.width = pct + "%";
+  document.getElementById("prog-msg").textContent = msg;
+}
+
+function showResults(data) {
+  document.getElementById("prog-wrap").style.display = "none";
+
+  // Market badge — interpretation flips for bearish mode
+  if (data.market) {
+    const m    = data.market;
+    const bear = data.bearish;
+    const el   = document.getElementById("market-badge");
+    // Bullish: want Nifty ABOVE 20 EMA. Bearish: want Nifty BELOW 20 EMA.
+    const mktFavourable = bear ? !m.ok : m.ok;
+    el.className = "market-badge " + (mktFavourable ? (bear ? "bear" : "bull") : "na");
+    el.innerHTML = `<span class="dot"></span>
+      Nifty 50: <strong>${fmt(m.price)}</strong>
+      &nbsp;|&nbsp; 20 EMA: ${fmt(m.ema20)}
+      &nbsp;|&nbsp; ${m.ok ? "&#9650; Above 20 EMA" : "&#9660; Below 20 EMA"}
+      &nbsp;|&nbsp; ${bear
+        ? (mktFavourable ? "Bearish market &#10003;" : "Market not bearish")
+        : (mktFavourable ? "Bullish market &#10003;" : "Market not bullish")}`;
+  }
+
+  document.getElementById("last-run").textContent = "Last run: " + new Date().toLocaleTimeString();
+
+  lastResults = data.results || [];
+  const count = lastResults.length;
+
+  document.getElementById("res-wrap").style.display = "block";
+  const isBear = data.bearish;
+  const tag    = isBear ? " — Short Candidates" : " — Long Candidates";
+  document.getElementById("res-title").textContent =
+    count ? `${count} Stock${count !== 1 ? "s" : ""} Passed All Conditions${tag}`
+           : "No Stocks Matched";
+  document.getElementById("res-meta").textContent =
+    `${isBear ? "Bearish" : "Bullish"} screen · Screened ${data.screened || 0} stocks · ${lastActiveConds.length} condition${lastActiveConds.length !== 1 ? "s" : ""} active`;
+
+  renderTable(lastResults);
+}
+
+// ── Table ───────────────────────────────────────────────────────────────
+const FIXED = [
+  { key: "Symbol",        label: "Symbol" },
+  { key: "Market_Cap_Cr", label: "Mkt Cap (Cr)" },
+  { key: "Price",         label: "Price" },
+  { key: "50DMA",         label: "50 DMA" },
+  { key: "Passed",        label: "Passed" },
+  { key: "RSI",           label: "RSI" },
+  { key: "Aroon",         label: "Aroon" },
+  { key: "RS_Alpha_55d",  label: "RS Alpha %" },
+  { key: "Mom_21",        label: "Mom(21)" },
+  { key: "EMA150_dist%",  label: "EMA150 %" },
+  { key: "Donchian_mid",  label: "DC Mid" },
+];
+
+function renderTable(rows) {
+  // Sort
+  rows = [...rows].sort((a, b) => {
+    let va = a[sortCol], vb = b[sortCol];
+    if (va === null || va === undefined) va = -Infinity;
+    if (vb === null || vb === undefined) vb = -Infinity;
+    if (typeof va === "string") va = va.toLowerCase();
+    if (typeof vb === "string") vb = vb.toLowerCase();
+    return (va < vb ? -1 : va > vb ? 1 : 0) * (sortAsc ? 1 : -1);
+  });
+
+  // Head
+  document.getElementById("tbl-head").innerHTML = "<tr>" +
+    FIXED.map(col => {
+      const arrow = sortCol === col.key ? (sortAsc ? " ↑" : " ↓") : "";
+      return `<th onclick="sortBy('${col.key}')">${col.label}${arrow}</th>`;
+    }).join("") + "</tr>";
+
+  // Body
+  if (!rows.length) {
+    document.getElementById("tbl-body").innerHTML =
+      `<tr><td colspan="${FIXED.length}" class="empty-state">
+         <h3>No stocks matched</h3>
+         <p>Try unchecking some conditions to widen the search.</p>
+       </td></tr>`;
+    return;
+  }
+
+  document.getElementById("tbl-body").innerHTML = rows.map(row => {
+    const rs  = row.RS_Alpha_55d || 0;
+    const mom = row.Mom_21 || 0;
+    const mc  = row.Market_Cap_Cr;
+    return `<tr>
+      <td><a class="sym-lnk" href="https://finance.yahoo.com/quote/${row.Symbol}.NS"
+             target="_blank">${row.Symbol}</a></td>
+      <td>${mc != null ? fmtCr(mc) : "—"}</td>
+      <td>${fmt(row.Price)}</td>
+      <td>${fmt(row["50DMA"])}</td>
+      <td><span class="pass-badge">${row.Passed}</span></td>
+      <td>${fmt(row.RSI)}</td>
+      <td>${fmt(row.Aroon)}</td>
+      <td class="${rs >= 0 ? 'pos' : 'neg'}">${rs >= 0 ? "+" : ""}${fmt(rs)}%</td>
+      <td class="${mom >= 0 ? 'pos' : 'neg'}">${fmt(mom)}</td>
+      <td>${fmt(row["EMA150_dist%"])}%</td>
+      <td>${fmt(row.Donchian_mid)}</td>
+    </tr>`;
+  }).join("");
+}
+
+function sortBy(col) {
+  if (sortCol === col) sortAsc = !sortAsc; else { sortCol = col; sortAsc = false; }
+  renderTable(lastResults);
+}
+
+function fmt(n) {
+  if (n === null || n === undefined) return "—";
+  if (typeof n !== "number") return n;
+  return n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}
+
+function fmtCr(n) {
+  if (n === null || n === undefined) return "—";
+  if (n >= 100000) return "₹" + (n / 100000).toLocaleString("en-IN", { maximumFractionDigits: 1 }) + " L Cr";
+  return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 }) + " Cr";
+}
+
+// ── Export CSV ──────────────────────────────────────────────────────────
+function exportCSV() {
+  if (!lastResults.length) return;
+  const keys = Object.keys(lastResults[0]);
+  const csv = [keys.join(","), ...lastResults.map(r => keys.map(k => JSON.stringify(r[k] ?? "")).join(","))].join("\n");
+  const a = Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })),
+    download: `cnx500_screener_${new Date().toISOString().slice(0,10)}.csv`,
+  });
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ── Init ────────────────────────────────────────────────────────────────
+buildUI();
+</script>
+</body>
+</html>
