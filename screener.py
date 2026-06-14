@@ -125,12 +125,27 @@ def get_cnx500_symbols() -> list[str]:
 
 # ── Market condition ──────────────────────────────────────────────────────
 
+def _extract_col(df: pd.DataFrame, col: str) -> pd.Series:
+    """Extract a named column as a clean float Series — handles flat and MultiIndex DataFrames."""
+    data = df[col]
+    if isinstance(data, pd.DataFrame):
+        data = data.iloc[:, 0]
+    return data.squeeze().dropna().astype(float)
+
+
 def nifty_above_20ema(nifty_df: pd.DataFrame) -> tuple[bool, float, float]:
-    close = nifty_df["Close"].squeeze()
-    ema20 = ema(close, 20)
-    last_close = float(close.iloc[-1])
-    last_ema20 = float(ema20.iloc[-1])
-    return last_close > last_ema20, round(last_close, 2), round(last_ema20, 2)
+    if nifty_df is None or nifty_df.empty:
+        return False, 0.0, 0.0
+    try:
+        close = _extract_col(nifty_df, "Close")
+        if len(close) < 20:
+            return False, 0.0, 0.0
+        ema20 = ema(close, 20)
+        last_close = float(close.iloc[-1])
+        last_ema20 = float(ema20.iloc[-1])
+        return last_close > last_ema20, round(last_close, 2), round(last_ema20, 2)
+    except Exception:
+        return False, 0.0, 0.0
 
 
 # ── Per-stock screening ───────────────────────────────────────────────────
@@ -138,18 +153,31 @@ def nifty_above_20ema(nifty_df: pd.DataFrame) -> tuple[bool, float, float]:
 def screen(ticker: str, df: pd.DataFrame, nifty_df: pd.DataFrame,
            active_conds=None, bearish: bool = False) -> dict | None:
     try:
+        # Align stock and Nifty on common trading dates
         common = df.index.intersection(nifty_df.index)
+        if len(common) < 160:
+            return None
         df = df.loc[common]
         nf = nifty_df.loc[common]
 
-        if len(df) < 160:
-            return None
+        # Extract OHLCV — _extract_col handles flat and MultiIndex column formats
+        close  = _extract_col(df, "Close")
+        high   = _extract_col(df, "High")
+        low    = _extract_col(df, "Low")
+        volume = _extract_col(df, "Volume")
+        nifty  = _extract_col(nf, "Close")
 
-        close  = df["Close"].squeeze().astype(float)
-        high   = df["High"].squeeze().astype(float)
-        low    = df["Low"].squeeze().astype(float)
-        volume = df["Volume"].squeeze().astype(float)
-        nifty  = nf["Close"].squeeze().astype(float)
+        # Remove rows where any key series is NaN so iloc accesses are safe
+        valid  = close.notna() & high.notna() & low.notna() & volume.notna() & nifty.notna()
+        idx    = valid[valid].index
+        close  = close.loc[idx]
+        high   = high.loc[idx]
+        low    = low.loc[idx]
+        volume = volume.loc[idx]
+        nifty  = nifty.loc[idx]
+
+        if len(close) < 160:
+            return None
 
         r = {}
 

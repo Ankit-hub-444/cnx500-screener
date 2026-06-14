@@ -8,6 +8,7 @@ import threading
 from datetime import datetime, timedelta
 
 import numpy as np
+import pandas as pd
 import yfinance as yf
 from flask import Flask, render_template, request, jsonify
 
@@ -92,10 +93,31 @@ def _run_job(active_conds, bearish: bool = False):
         results = []
         n = len(symbols)
 
+        # Detect yfinance column format once (flat vs MultiIndex, ticker at level 0 or 1)
+        _raw_is_multi = isinstance(raw.columns, pd.MultiIndex)
+        if _raw_is_multi:
+            _lv0 = set(raw.columns.get_level_values(0))
+            _lv1 = set(raw.columns.get_level_values(1))
+        else:
+            _lv0 = set(raw.columns)
+            _lv1 = set()
+
+        def _get_stock_df(sym: str):
+            if n == 1:
+                return raw  # single-ticker download — raw IS the stock df
+            if _raw_is_multi:
+                if sym in _lv0:
+                    return raw[sym].dropna(how="all")
+                if sym in _lv1:
+                    return raw.xs(sym, axis=1, level=1).dropna(how="all")
+                return pd.DataFrame()
+            # Flat columns (shouldn't happen for multi-ticker bulk download, but guard anyway)
+            return raw[sym].dropna(how="all") if sym in _lv0 else pd.DataFrame()
+
         for i, sym in enumerate(symbols):
             try:
-                stock_df = raw[sym].dropna(how="all") if n > 1 else raw
-                if stock_df.empty:
+                stock_df = _get_stock_df(sym)
+                if stock_df is None or stock_df.empty:
                     continue
                 res = screen(sym, stock_df, nifty_df, active_conds=conds, bearish=bearish)
                 if res and res["All_Pass"]:
