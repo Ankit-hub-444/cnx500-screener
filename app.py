@@ -1,7 +1,7 @@
 import warnings
 warnings.filterwarnings("ignore")
 
-import sys, os
+import sys, os, traceback
 sys.path.insert(0, os.path.dirname(__file__))
 
 import threading
@@ -148,7 +148,9 @@ def _run_job(active_conds, bearish: bool = False):
         )
 
     except Exception as exc:
-        _upd(running=False, status="error", error=str(exc),
+        tb = traceback.format_exc()
+        _upd(running=False, status="error",
+             error=f"{exc}\n\n{tb}",
              message=f"Error: {exc}")
 
 

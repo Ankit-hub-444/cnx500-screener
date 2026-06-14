@@ -126,11 +126,15 @@ def get_cnx500_symbols() -> list[str]:
 # ── Market condition ──────────────────────────────────────────────────────
 
 def _extract_col(df: pd.DataFrame, col: str) -> pd.Series:
-    """Extract a named column as a clean float Series — handles flat and MultiIndex DataFrames."""
+    """Extract a named column as a float Series — handles flat and MultiIndex DataFrames."""
     data = df[col]
     if isinstance(data, pd.DataFrame):
         data = data.iloc[:, 0]
-    return data.squeeze().dropna().astype(float)
+    s = data.squeeze()
+    # squeeze() on a single-element Series returns a scalar; guard against it
+    if not isinstance(s, pd.Series):
+        s = pd.Series([s], index=df.index[-1:])
+    return s.astype(float)
 
 
 def nifty_above_20ema(nifty_df: pd.DataFrame) -> tuple[bool, float, float]:
@@ -167,17 +171,21 @@ def screen(ticker: str, df: pd.DataFrame, nifty_df: pd.DataFrame,
         volume = _extract_col(df, "Volume")
         nifty  = _extract_col(nf, "Close")
 
-        # Remove rows where any key series is NaN so iloc accesses are safe
-        valid  = close.notna() & high.notna() & low.notna() & volume.notna() & nifty.notna()
-        idx    = valid[valid].index
-        close  = close.loc[idx]
-        high   = high.loc[idx]
-        low    = low.loc[idx]
-        volume = volume.loc[idx]
-        nifty  = nifty.loc[idx]
+        # Build the set of dates where ALL five series have non-NaN data.
+        # Using explicit index intersection avoids any ambiguity with bool-series
+        # alignment (different dtypes / NaN handling across pandas versions).
+        idx = close.dropna().index
+        for _s in (high, low, volume, nifty):
+            idx = idx.intersection(_s.dropna().index)
 
-        if len(close) < 160:
+        if len(idx) < 160:
             return None
+
+        close  = close.reindex(idx)
+        high   = high.reindex(idx)
+        low    = low.reindex(idx)
+        volume = volume.reindex(idx)
+        nifty  = nifty.reindex(idx)
 
         r = {}
 
