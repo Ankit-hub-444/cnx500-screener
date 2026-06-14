@@ -12,13 +12,13 @@ import yfinance as yf
 from flask import Flask, render_template, request, jsonify
 
 from screener import (
-    get_cnx500_symbols, nifty_above_20ema, screen,
+    get_cnx500_data, get_cnx500_symbols, nifty_above_20ema, screen,
 )
 
 app = Flask(__name__)
 
 # ── In-memory cache (1 hour TTL) ─────────────────────────────────────────
-_cache = {"symbols": None, "raw": None, "nifty": None, "fetched_at": None}
+_cache = {"symbols": None, "raw": None, "nifty": None, "industry": {}, "fetched_at": None}
 _CACHE_TTL = timedelta(hours=1)
 
 # ── Single-job state ──────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ def _run_job(active_conds, bearish: bool = False):
              message="Fetching CNX 500 symbol list...", error=None, results=None)
 
         if not _cache_valid():
-            symbols = get_cnx500_symbols()
+            symbols, industry_map = get_cnx500_data()
             _upd(progress=10, message=f"Loaded {len(symbols)} symbols — downloading Nifty 50...")
 
             nifty_df = yf.download("^NSEI", period="1y", interval="1d",
@@ -74,14 +74,16 @@ def _run_job(active_conds, bearish: bool = False):
             )
             with _lock:
                 _cache.update({"symbols": symbols, "raw": raw,
-                               "nifty": nifty_df, "fetched_at": datetime.now()})
+                               "nifty": nifty_df, "industry": industry_map,
+                               "fetched_at": datetime.now()})
         else:
             _upd(progress=50, message="Using cached data (downloaded < 1 hour ago)...")
 
         with _lock:
-            symbols  = _cache["symbols"]
-            raw      = _cache["raw"]
-            nifty_df = _cache["nifty"]
+            symbols      = _cache["symbols"]
+            raw          = _cache["raw"]
+            nifty_df     = _cache["nifty"]
+            industry_map = _cache["industry"]
 
         nifty_ok, nifty_price, nifty_ema20 = nifty_above_20ema(nifty_df)
         _upd(progress=55, message="Screening stocks...", total=len(symbols), screened=0)
@@ -97,7 +99,9 @@ def _run_job(active_conds, bearish: bool = False):
                     continue
                 res = screen(sym, stock_df, nifty_df, active_conds=conds, bearish=bearish)
                 if res and res["All_Pass"]:
-                    results.append(_safe_row(res))
+                    row = _safe_row(res)
+                    row["Sector"] = industry_map.get(row["Symbol"], "—")
+                    results.append(row)
             except Exception:
                 pass
             if i % 20 == 0:

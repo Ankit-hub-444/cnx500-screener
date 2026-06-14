@@ -247,9 +247,10 @@ const GROUPS = [
   {
     id: "trend", title: "Trend",
     conds: [
-      { key: "c0_150EMA",   label: "Near / Crossed 150 EMA" },
-      { key: "c1_RS_Alpha", label: "RS Alpha (55d) > 0" },
-      { key: "c2_Ratio",    label: "Ratio Chart (vs Nifty 50) > 20 EMA" },
+      { key: "c0_150EMA",     label: "Near / Crossed 150 EMA" },
+      { key: "c11_EMA20cross",label: "Just Crossed > 20 EMA" },
+      { key: "c1_RS_Alpha",   label: "RS Alpha (55d) > 0" },
+      { key: "c2_Ratio",      label: "Ratio Chart (vs Nifty 50) > 20 EMA" },
     ]
   },
   {
@@ -276,8 +277,9 @@ const ALL_CONDS = GROUPS.flatMap(g => g.conds);
 
 // Bearish label overrides (all conditions reversed)
 const BEAR_LABELS = {
-  "c0_150EMA":    "Near / Crossed BELOW 150 EMA",
-  "c1_RS_Alpha":  "RS Alpha (55d) < 0  (Underperforming)",
+  "c0_150EMA":      "Near / Crossed BELOW 150 EMA",
+  "c11_EMA20cross": "Just Crossed < 20 EMA",
+  "c1_RS_Alpha":    "RS Alpha (55d) < 0  (Underperforming)",
   "c2_Ratio":     "Ratio Chart (vs Nifty 50) < 20 EMA",
   "c10_Donchian": "Price < Donchian Channel (21d) Mid",
   "c3_RSI":       "RSI (14) < 50",
@@ -471,6 +473,7 @@ function showResults(data) {
 // ── Table ───────────────────────────────────────────────────────────────
 const FIXED = [
   { key: "Symbol",        label: "Symbol" },
+  { key: "Sector",        label: "Sector" },
   { key: "Market_Cap_Cr", label: "Mkt Cap (Cr)" },
   { key: "Price",         label: "Price" },
   { key: "50DMA",         label: "50 DMA" },
@@ -518,6 +521,7 @@ function renderTable(rows) {
     return `<tr>
       <td><a class="sym-lnk" href="https://finance.yahoo.com/quote/${row.Symbol}.NS"
              target="_blank">${row.Symbol}</a></td>
+      <td style="color:var(--muted);font-size:12px">${row.Sector || "—"}</td>
       <td>${mc != null ? fmtCr(mc) : "—"}</td>
       <td>${fmt(row.Price)}</td>
       <td>${fmt(row["50DMA"])}</td>

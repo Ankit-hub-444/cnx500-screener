@@ -96,19 +96,31 @@ def momentum(series: pd.Series, period: int = 21) -> pd.Series:
 
 CNX500_URL = "https://www.niftyindices.com/IndexConstituent/ind_nifty500list.csv"
 
-def get_cnx500_symbols() -> list[str]:
+def get_cnx500_data() -> tuple[list[str], dict[str, str]]:
+    """Returns (symbols_with_.NS, {SYMBOL: industry_string})"""
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
         resp = requests.get(CNX500_URL, headers=headers, timeout=20)
         resp.raise_for_status()
         df = pd.read_csv(StringIO(resp.text))
-        col = next(c for c in df.columns if "symbol" in c.lower())
-        symbols = df[col].str.strip().dropna().tolist()
+        df.columns = df.columns.str.strip()
+        sym_col = next(c for c in df.columns if "symbol"   in c.lower())
+        ind_col = next((c for c in df.columns if "industry" in c.lower()), None)
+        df[sym_col] = df[sym_col].str.strip()
+        symbols = df[sym_col].dropna().tolist()
+        industry_map: dict[str, str] = {}
+        if ind_col:
+            df[ind_col] = df[ind_col].str.strip()
+            industry_map = dict(zip(df[sym_col], df[ind_col]))
         print(f"      Loaded {len(symbols)} symbols from NSE")
-        return [s + ".NS" for s in symbols]
+        return [s + ".NS" for s in symbols], industry_map
     except Exception as exc:
         print(f"      [WARN] NSE download failed ({exc}). Exiting.")
         sys.exit(1)
+
+
+def get_cnx500_symbols() -> list[str]:
+    return get_cnx500_data()[0]
 
 
 # ── Market condition ──────────────────────────────────────────────────────
@@ -182,10 +194,20 @@ def screen(ticker: str, df: pd.DataFrame, nifty_df: pd.DataFrame,
         aroon_osc = aroon_oscillator(high, low, 25)
         r["Aroon"] = round(float(aroon_osc.iloc[-1]), 2)
 
-        # EMA 20 vs 50
-        ema20     = ema(close, 20)
-        ema50     = ema(close, 50)
-        ema_bull  = float(ema20.iloc[-1]) > float(ema50.iloc[-1])
+        # EMA 20 vs 50 + 20 EMA cross detection
+        ema20    = ema(close, 20)
+        ema50    = ema(close, 50)
+        ema_bull = float(ema20.iloc[-1]) > float(ema50.iloc[-1])
+        crossed_above_ema20 = any(
+            float(close.iloc[-(i+2)]) < float(ema20.iloc[-(i+2)])
+            and float(close.iloc[-(i+1)]) >= float(ema20.iloc[-(i+1)])
+            for i in range(5)
+        )
+        crossed_below_ema20 = any(
+            float(close.iloc[-(i+2)]) > float(ema20.iloc[-(i+2)])
+            and float(close.iloc[-(i+1)]) <= float(ema20.iloc[-(i+1)])
+            for i in range(5)
+        )
 
         # Kaufman AMA
         kama      = kaufman_ama(close, er_length=14, fast=2, slow=30)
@@ -212,23 +234,25 @@ def screen(ticker: str, df: pd.DataFrame, nifty_df: pd.DataFrame,
             r["c3_RSI"]       = r["RSI"] > 50
             r["c4_MACD"]      = macd_bull
             r["c5_Aroon"]     = r["Aroon"] > 0
-            r["c6_EMA20_50"]  = ema_bull
-            r["c7_AMA"]       = ama_bull
-            r["c8_AD"]        = ad_bull
-            r["c9_Mom"]       = r["Mom_21"] > 0
-            r["c10_Donchian"] = dc_bull
+            r["c6_EMA20_50"]   = ema_bull
+            r["c7_AMA"]        = ama_bull
+            r["c8_AD"]         = ad_bull
+            r["c9_Mom"]        = r["Mom_21"] > 0
+            r["c10_Donchian"]  = dc_bull
+            r["c11_EMA20cross"]= crossed_above_ema20
         else:
-            r["c0_150EMA"]    = crossed_below_150 or near_below_150
-            r["c1_RS_Alpha"]  = rs_alpha < 0
-            r["c2_Ratio"]     = not ratio_bull
-            r["c3_RSI"]       = r["RSI"] < 50
-            r["c4_MACD"]      = not macd_bull
-            r["c5_Aroon"]     = r["Aroon"] < 0
-            r["c6_EMA20_50"]  = not ema_bull
-            r["c7_AMA"]       = not ama_bull
-            r["c8_AD"]        = not ad_bull
-            r["c9_Mom"]       = r["Mom_21"] < 0
-            r["c10_Donchian"] = not dc_bull
+            r["c0_150EMA"]     = crossed_below_150 or near_below_150
+            r["c1_RS_Alpha"]   = rs_alpha < 0
+            r["c2_Ratio"]      = not ratio_bull
+            r["c3_RSI"]        = r["RSI"] < 50
+            r["c4_MACD"]       = not macd_bull
+            r["c5_Aroon"]      = r["Aroon"] < 0
+            r["c6_EMA20_50"]   = not ema_bull
+            r["c7_AMA"]        = not ama_bull
+            r["c8_AD"]         = not ad_bull
+            r["c9_Mom"]        = r["Mom_21"] < 0
+            r["c10_Donchian"]  = not dc_bull
+            r["c11_EMA20cross"]= crossed_below_ema20
 
         # ── Summary ───────────────────────────────────────────────────────
         all_cond_keys = sorted(k for k in r if k.startswith("c"))
