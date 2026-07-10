@@ -7,6 +7,7 @@ Required environment variables:
   TELEGRAM_CHAT_ID    - target group chat id (negative number for groups)
 """
 
+import html
 import os
 import sys
 
@@ -47,9 +48,11 @@ def format_message(results: list[dict], nifty_ok: bool, nifty_price: float, nift
     for r in results:
         mc = r.get("Market_Cap_Cr")
         mc_str = f"{mc:,} Cr" if mc else "—"
+        symbol = html.escape(r["Symbol"])
+        sector = html.escape(r.get("Sector", "—"))
         lines.append(
-            f"• <b>{r['Symbol']}</b> — ₹{r['Price']} | RSI {r['RSI']} | "
-            f"RS α {r['RS_Alpha_55d']}% | MCap {mc_str} | {r.get('Sector', '—')}"
+            f"• <b>{symbol}</b> — ₹{r['Price']} | RSI {r['RSI']} | "
+            f"RS α {r['RS_Alpha_55d']}% | MCap {mc_str} | {sector}"
         )
     return "\n".join(lines)
 
