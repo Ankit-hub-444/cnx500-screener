@@ -1,0 +1,27 @@
+name: Telegram Screener Alert
+
+on:
+  schedule:
+    # Every 30 min, 04:00-10:00 UTC = 09:30-15:30 IST, Mon-Fri (NSE trading hours)
+    - cron: "0,30 4-10 * * 1-5"
+  workflow_dispatch: {}   # allows manual "Run workflow" trigger for testing
+
+jobs:
+  screen-and-alert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run screener and send Telegram alert
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python telegram_alert.py
