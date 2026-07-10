@@ -31,6 +31,8 @@ def send_telegram_message(text: str) -> None:
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }, timeout=20)
+    if not resp.ok:
+        print(f"Telegram API error {resp.status_code}: {resp.text}")
     resp.raise_for_status()
 
 
