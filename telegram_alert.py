@@ -69,17 +69,15 @@ def format_message(results: list[dict], nifty_ok: bool, nifty_price: float, nift
         symbol = html.escape(r["Symbol"])
         sector = html.escape(r.get("Sector", "—"))
         lines.append(
-            f"• <b>{symbol}</b> — ₹{r['Price']} | RSI {r['RSI']} | "
-            f"RS α {r['RS_Alpha_55d']}% | MCap {mc_str} | {sector}"
+            f"• <b>{symbol}</b> — ₹{r['Price']} | MCap {mc_str} | {sector}"
         )
         if r.get("Stop") is not None:
             lines.append(
                 f"   Entry ₹{r['Price']} | SL ₹{r['Stop']} (-{r['Risk_pct']}%) | "
-                f"Target ₹{r['Target']} (+{r['Reward_pct']}%) | R:R 1:2 | ATR(14) {r['ATR_14']}"
+                f"Target ₹{r['Target']} (+{r['Reward_pct']}%)"
             )
         else:
             lines.append("   SL/Target unavailable (insufficient ATR data)")
-    lines.append("\n<i>SL = Entry − 2×ATR(14). Target = Entry + 2×risk (fixed 2:1 R:R). Not investment advice.</i>")
     return "\n".join(lines)
 
 
