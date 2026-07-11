@@ -37,19 +37,20 @@ def send_telegram_message(text: str) -> None:
 
 
 def add_trade_levels(r: dict) -> None:
-    """Entry/stop/target using 2x ATR(14) stop and a fixed 2:1 reward:risk target."""
+    """Entry/stop/target using 1x ATR(14) stop and a fixed 1.5:1 reward:risk target (intraday-sized)."""
     entry = r["Price"]
     atr14 = r.get("ATR_14") or 0
     if atr14 <= 0:
         r["Stop"] = r["Target"] = r["Risk_pct"] = r["Reward_pct"] = None
         return
-    risk = 2 * atr14
+    risk = 1 * atr14
+    reward = 1.5 * risk
     stop = entry - risk
-    target = entry + 2 * risk  # fixed 2:1 reward:risk
+    target = entry + reward
     r["Stop"] = round(stop, 2)
     r["Target"] = round(target, 2)
     r["Risk_pct"] = round(risk / entry * 100, 2)
-    r["Reward_pct"] = round(2 * risk / entry * 100, 2)
+    r["Reward_pct"] = round(reward / entry * 100, 2)
 
 
 def format_message(results: list[dict], nifty_ok: bool, nifty_price: float, nifty_ema20: float) -> str:
