@@ -53,8 +53,9 @@ def add_trade_levels(r: dict) -> None:
 
 
 def format_message(results: list[dict], nifty_ok: bool, nifty_price: float, nifty_ema20: float) -> str:
-    from datetime import datetime
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+    from datetime import datetime, timedelta, timezone
+    ist = timezone(timedelta(hours=5, minutes=30))
+    ts = datetime.now(timezone.utc).astimezone(ist).strftime("%Y-%m-%d %H:%M IST")
     market_line = f"Nifty 50: {nifty_price} | 20 EMA: {nifty_ema20} | Above 20 EMA: {'YES' if nifty_ok else 'NO'}"
 
     if not results:
