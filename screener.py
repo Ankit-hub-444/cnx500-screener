@@ -92,6 +92,17 @@ def momentum(series: pd.Series, period: int = 21) -> pd.Series:
     return series - series.shift(period)
 
 
+def atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    """Average True Range (Wilder's smoothing)."""
+    prev_close = close.shift(1)
+    tr = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    return tr.ewm(com=period - 1, adjust=False).mean()
+
+
 # ── CNX 500 symbol list ───────────────────────────────────────────────────
 
 CNX500_URL = "https://www.niftyindices.com/IndexConstituent/ind_nifty500list.csv"
@@ -261,6 +272,10 @@ def screen(ticker: str, df: pd.DataFrame, nifty_df: pd.DataFrame,
         dc_mid = (high.rolling(21).max() + low.rolling(21).min()) / 2
         r["Donchian_mid"] = round(float(dc_mid.iloc[-1]), 2)
         dc_bull = float(close.iloc[-1]) > float(dc_mid.iloc[-1])
+
+        # ATR (for stop-loss / target sizing downstream)
+        atr14 = atr(high, low, close, 14)
+        r["ATR_14"] = round(float(atr14.iloc[-1]), 2)
 
         # ── Apply conditions (direction flips for bearish) ────────────────
         if not bearish:

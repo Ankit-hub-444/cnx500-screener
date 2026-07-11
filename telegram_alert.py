@@ -36,6 +36,22 @@ def send_telegram_message(text: str) -> None:
     resp.raise_for_status()
 
 
+def add_trade_levels(r: dict) -> None:
+    """Entry/stop/target using 2x ATR(14) stop and a fixed 2:1 reward:risk target."""
+    entry = r["Price"]
+    atr14 = r.get("ATR_14") or 0
+    if atr14 <= 0:
+        r["Stop"] = r["Target"] = r["Risk_pct"] = r["Reward_pct"] = None
+        return
+    risk = 2 * atr14
+    stop = entry - risk
+    target = entry + 2 * risk  # fixed 2:1 reward:risk
+    r["Stop"] = round(stop, 2)
+    r["Target"] = round(target, 2)
+    r["Risk_pct"] = round(risk / entry * 100, 2)
+    r["Reward_pct"] = round(2 * risk / entry * 100, 2)
+
+
 def format_message(results: list[dict], nifty_ok: bool, nifty_price: float, nifty_ema20: float) -> str:
     from datetime import datetime
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -56,6 +72,14 @@ def format_message(results: list[dict], nifty_ok: bool, nifty_price: float, nift
             f"• <b>{symbol}</b> — ₹{r['Price']} | RSI {r['RSI']} | "
             f"RS α {r['RS_Alpha_55d']}% | MCap {mc_str} | {sector}"
         )
+        if r.get("Stop") is not None:
+            lines.append(
+                f"   Entry ₹{r['Price']} | SL ₹{r['Stop']} (-{r['Risk_pct']}%) | "
+                f"Target ₹{r['Target']} (+{r['Reward_pct']}%) | R:R 1:2 | ATR(14) {r['ATR_14']}"
+            )
+        else:
+            lines.append("   SL/Target unavailable (insufficient ATR data)")
+    lines.append("\n<i>SL = Entry − 2×ATR(14). Target = Entry + 2×risk (fixed 2:1 R:R). Not investment advice.</i>")
     return "\n".join(lines)
 
 
@@ -81,6 +105,7 @@ def main() -> None:
             res = screen(sym, stock_df, nifty_df, active_conds=None, bearish=False)
             if res and res["All_Pass"]:
                 res["Sector"] = industry_map.get(res["Symbol"], "—")
+                add_trade_levels(res)
                 results.append(res)
         except Exception:
             continue
